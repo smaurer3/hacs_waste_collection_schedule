@@ -9,7 +9,7 @@ waste_collection_schedule:
   sources:
     - name: goldenplains_vic_gov_au
       args:
-        address: ADDRESS # Formatting should be precise, please see below
+        address: ADDRESS # Street number, street name and suburb, please see below
 ```
 
 ### Configuration Variables
@@ -29,4 +29,4 @@ waste_collection_schedule:
 
 ## How to get the correct address
 
-Search your address on the [Golden Plains Shire Council waste collection page](https://www.goldenplains.vic.gov.au/address-search) and use the address exactly as it appears in the autocomplete suggestions (typically in the format `STREET NUMBER STREET NAME SUBURB POSTCODE`).
+Search your address on the [Golden Plains Shire Council waste collection page](https://www.goldenplains.vic.gov.au/address-search) and enter it as `STREET NUMBER STREET NAME SUBURB`, for example `2 POPE STREET BANNOCKBURN`. Upper/lower case, commas, the state (`VIC`) and the postcode are ignored, so `2 Pope Street Bannockburn Vic 3331` works too.

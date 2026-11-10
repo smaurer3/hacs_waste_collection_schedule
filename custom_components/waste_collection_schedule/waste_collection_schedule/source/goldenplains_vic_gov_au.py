@@ -28,33 +28,49 @@ CARD_TYPES = {
 }
 
 
+def _address_key(address: str) -> str:
+    """Reduce an address to a form that does not depend on how the council writes it.
+
+    The council's address search is a case-insensitive "contains" match and returns
+    addresses such as "48 Giles Drive Bannockburn Vic 3331" (the state is written
+    "Vic" or "VIC" and has changed before), so a user-entered
+    "48 GILES DRIVE BANNOCKBURN 3331" finds nothing. Case, commas, the state and the
+    postcode are therefore ignored when searching and comparing.
+    """
+    key = re.sub(r"[,\s]+", " ", address).strip().upper()
+    # only a trailing state and/or postcode: "VICTORIA STREET" must be kept
+    key = re.sub(r"(\s+(VIC|VICTORIA|\d{4}))+$", "", key)
+    return re.sub(r"\s+", " ", key).strip()
+
+
 class Source:
     def __init__(self, address: str):
         self._address = re.sub(r"\s+", " ", address).strip()
 
-    def fetch(self) -> list[Collection]:
-        # Step 1: validate address against autocomplete and get canonical form
-        session = requests.Session(impersonate="chrome")
-        r = session.get(
-            AUTOCOMPLETE_URL,
-            params={"q": self._address},
-            timeout=30,
-        )
+    def _suggestions(self, session, query: str) -> list[dict]:
+        r = session.get(AUTOCOMPLETE_URL, params={"q": query}, timeout=30)
         r.raise_for_status()
-        suggestions = r.json()
+        return r.json() or []
 
-        if not suggestions:
-            raise SourceArgumentNotFoundWithSuggestions(
-                "address",
-                self._address,
-                [],
-            )
+    def fetch(self) -> list[Collection]:
+        # Step 1: find the address as the council writes it
+        session = requests.Session(impersonate="chrome")
+        wanted = _address_key(self._address)
 
-        # Check for an exact match (case-insensitive) or fall back to suggestions
+        # Search for the address without state/postcode first (that is always a
+        # substring of the council's form); fall back to exactly what was entered.
+        suggestions: list[dict] = []
         canonical = None
-        for item in suggestions:
-            if item["value"].upper() == self._address.upper():
-                canonical = item["value"]
+        for query in dict.fromkeys([wanted, self._address]):
+            if not query:
+                continue
+            found = self._suggestions(session, query)
+            suggestions = suggestions or found
+            canonical = next(
+                (i["value"] for i in found if _address_key(i["value"]) == wanted),
+                None,
+            )
+            if canonical is not None:
                 break
 
         if canonical is None:
