@@ -5,9 +5,11 @@ import time
 import uuid
 from collections import Counter, OrderedDict
 from datetime import date, datetime
+from urllib.parse import unquote_plus
 
 import requests
 from bs4 import BeautifulSoup, Tag
+
 from waste_collection_schedule.exceptions import (
     SourceArgumentNotFound,
     SourceArgumentNotFoundWithSuggestions,
@@ -136,7 +138,17 @@ SUPPORTED_SERVICES = {
         "Tübingen",
     ],
     "de.k4systems.abfallinfocw": ["Kreis Calw"],
-    "de.k4systems.abfallinfoapp": ["Mechernich und Kommunen"],
+    "de.k4systems.abfallinfoapp": [
+        "Kreis Euskirchen",
+        "Bad Münstereifel",
+        "Dahlem",
+        "Hellenthal",
+        "Kall",
+        "Mechernich",
+        "Schleiden",
+        "Weilerswist",
+        "Zülpich",
+    ],
     "de.k4systems.abfallappes": ["Landkreis Esslingen"],
     "de.k4systems.egst": ["Kreis Steinfurt"],
     "de.idcontor.abfallwbd": ["Duisburg"],
@@ -276,6 +288,7 @@ MAP_APP_USERAGENTS = {
     "abfallMA.ucom.de": "Abfall-Ma",
     "de.ahrweiler.meinawb": "Abfall App",
     "de.abfallwecker": "ABFALL+",
+    "de.abfallplus.ahe": "AHE",
     "de.albagroup.app": "Abfuhrtermine",
     "de.biberach.abfallapp": "Abfall App",
     "de.cmcitymedia.hokwaste": "Abfallinfo HOK",
@@ -395,7 +408,7 @@ API_BASE = "https://app.abfallplus.de/{}"
 API_ASSISTANT = API_BASE.format("assistent/{}")  # ignore: E501
 USER_AGENT = "Android / {} 8.1.1 (1915081010) / DM=unknown;DT=vbox86p;SN=Google;SV=8.1.0 (27);MF=unknown"
 USER_AGENT_ASSISTANT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Abfallwecker"
-ABFALLARTEN_H2_SKIP = ["Sondermüll"]
+ABFALLARTEN_H2_SKIP = ["Sondermüll", "Giftmobil"]
 VERIFY_SSL = True
 
 
@@ -426,7 +439,9 @@ def extract_onclicks(
         try:
             to_return.append(json.loads(string))
         except json.decoder.JSONDecodeError:
-            raise Exception(f"Failed to parse '{string}', onclick: '{onclick}'")
+            raise Exception(
+                f"Failed to parse '{string}', onclick: '{onclick}'"
+            ) from None
         if hnr:
             res = re.search(r"\.val\([0-9]+\)", onclick)
             if res:
@@ -457,7 +472,7 @@ class AppAbfallplusDe:
         bezirk_id="",
         strasse_id=None,
         hnr_id=None,
-    ):
+    ) -> None:
         self._client = str(uuid.uuid4())
 
         self._app_id = app_id
@@ -477,6 +492,9 @@ class AppAbfallplusDe:
         self._strasse_id = strasse_id
 
         self._needs_subtitle: list[str] = []
+        # every street entry with the selected name (the provider can split one street by house number)
+        self._street_matches: list[dict] = []
+        self._ids_before_street = (kommune_id, bezirk_id)
 
     def _request(
         self,
@@ -504,6 +522,8 @@ class AppAbfallplusDe:
             headers["User-Agent"] = USER_AGENT.format(
                 MAP_APP_USERAGENTS.get(self._app_id, "%")
             )
+            headers["x-abfallplus-client"] = self._client
+            headers["x-abfallplus-appid"] = self._app_id
 
         if "config.xml" in url_ending:
             headers["Accept-Encoding"] = "gzip, deflate, br"
@@ -559,7 +579,7 @@ class AppAbfallplusDe:
         r.raise_for_status()
         soup = BeautifulSoup(r.text, features="html.parser")
         if not (inputs := soup.find_all("input")):
-            return
+            return None
 
         for input in inputs:
             if input.attrs["name"] == "f_id_bundesland":
@@ -779,24 +799,31 @@ class AppAbfallplusDe:
             self._strasse_search = streets[0]["name"]
         if self._strasse_search is None and len(streets) == 0:
             return
-        elif self._strasse_search is None:
-            SourceArgumentRequiredWithSuggestions(
-                "strasse", [s["name"] for s in streets]
+        if self._strasse_search is None:
+            raise SourceArgumentRequiredWithSuggestions(
+                "strasse",
+                "multiple streets found, please specify one",
+                [s["name"] for s in streets],
             )
 
-        for street in streets:
-            if compare(street["name"], self._strasse_search):
-                self._f_id_strasse = self._strasse_id = street["id"]
-                if street["id_kommune"] is not None:
-                    self._kommune_id = street["id_kommune"]
-                if street["id_beirk"] is not None:
-                    self._bezirk_id = street["id_beirk"]
-                self._hnrs = street["hrns"]
-                return
+        matches = [s for s in streets if compare(s["name"], self._strasse_search)]
+        if matches:
+            self._street_matches = matches
+            self._ids_before_street = (self._kommune_id, self._bezirk_id)
+            self._use_street(matches[0])
+            return
         street_names = [s["name"] for s in streets]
         raise SourceArgumentNotFoundWithSuggestions(
             "strasse", self._strasse_search, street_names
         )
+
+    def _use_street(self, street: dict) -> None:
+        self._f_id_strasse = self._strasse_id = street["id"]
+        if street["id_kommune"] is not None:
+            self._kommune_id = street["id_kommune"]
+        if street["id_beirk"] is not None:
+            self._bezirk_id = street["id_beirk"]
+        self._hnrs = street["hrns"]
 
     def get_hrn_needed(self) -> bool:
         return self._hnrs
@@ -818,7 +845,7 @@ class AppAbfallplusDe:
             hnrs.append(
                 {
                     "id": a[0],
-                    "name": a[0].split("|")[0],
+                    "name": unquote_plus(a[0]).split("|")[0],
                     "f_id_strasse": a[6] if len(a) > 6 else None,
                 }
             )
@@ -834,24 +861,48 @@ class AppAbfallplusDe:
             return
         elif self._hnr_search is None:
             raise SourceArgumentRequiredWithSuggestions(
-                "hnr", [hnr["name"] for hnr in hnrs]
+                "hnr",
+                "multiple house numbers found, please specify one",
+                [hnr["name"] for hnr in hnrs],
             )
-        for hnr in hnrs:
-            if compare(hnr["name"], self._hnr_search, remove_space=True):
-                self._hnr = hnr["id"]
-                if hnr["f_id_strasse"] is not None:
-                    self._f_id_strasse = hnr["f_id_strasse"]
-                return
+        if self._find_hnr(hnrs, self._hnr_search):
+            return
         # fall back to "Alle Hausnummern" if the specific house number is not found
-        for hnr in hnrs:
-            if compare(hnr["name"], "Alle Hausnummern", remove_space=True):
-                self._hnr = hnr["id"]
-                if hnr["f_id_strasse"] is not None:
-                    self._f_id_strasse = hnr["f_id_strasse"]
+        if self._find_hnr(hnrs, "Alle Hausnummern"):
+            return
+        # the provider can list one street several times, each entry with part
+        # of the house numbers: look for the number in the other entries too
+        selected = self._strasse_id
+        others = [s for s in self._street_matches if s["id"] != selected]
+        all_names = [hnr["name"] for hnr in hnrs]
+        for street in others:
+            self._kommune_id, self._bezirk_id = self._ids_before_street
+            self._use_street(street)
+            other_hnrs = self.get_hnrs()
+            if self._find_hnr(other_hnrs, self._hnr_search):
                 return
-        raise SourceArgumentNotFoundWithSuggestions(
-            "hnr", self._hnr_search, [hnr["name"] for hnr in hnrs]
-        )
+            all_names += [hnr["name"] for hnr in other_hnrs]
+        if others:
+            self._kommune_id, self._bezirk_id = self._ids_before_street
+            self._use_street(self._street_matches[0])
+        raise SourceArgumentNotFoundWithSuggestions("hnr", self._hnr_search, all_names)
+
+    def _find_hnr(self, hnrs: list[dict], name: str) -> bool:
+        names = [name]
+        decoded = unquote_plus(name)
+        if "|" in decoded:
+            # Before #6662 the config flow offered the raw ID ("3%7C%7C174955001")
+            # as house number, so saved configs may still hold it: match its
+            # house-number part ("3") too.
+            names.append(decoded.split("|")[0])
+        for candidate in names:
+            for hnr in hnrs:
+                if compare(hnr["name"], candidate, remove_space=True):
+                    self._hnr = hnr["id"]
+                    if hnr["f_id_strasse"] is not None:
+                        self._f_id_strasse = hnr["f_id_strasse"]
+                    return True
+        return False
 
     def select_all_waste_types(self):
         data = {
@@ -874,17 +925,30 @@ class AppAbfallplusDe:
                 to_skip_element.find_parent("div") if to_skip_element else None
             )
             if div_to_skip:
-                for input in to_skip_element.find_parent("div").find_all(
+                for input in div_to_skip.find_all(
                     "input", {"name": "f_id_abfallart[]"}
                 ):
-                    if compare(input.text, self._region_search, remove_space=True):
+                    # The visible label (e.g. the municipality name for a
+                    # "Sondermüll"/"Giftmobil" per-town toggle list) lives in
+                    # a sibling <ion-item>, not in the <input> itself, which
+                    # has no text content.
+                    label_item = input.find_next_sibling("ion-item")
+                    label_text = (
+                        label_item.get_text(strip=True)
+                        if label_item is not None
+                        else input.text
+                    )
+                    if compare(label_text, self._region_search, remove_space=True):
                         id = input.attrs["id"].split("_")[-1]
-                        self._f_id_abfallart.append(input.attrs["value"])
+                        self._f_id_abfallart.append(id)
                         self._needs_subtitle.append(id)
                         if id.isdigit():
                             self._needs_subtitle.append(str(int(id) - 1))
                         break
-                # remove sondermuell h2 from soup
+                # Remove this heading's whole section from the soup so that
+                # any remaining, non-matching entries (e.g. the Giftmobil
+                # toggle for every other municipality in the Landkreis) are
+                # not swept up by the generic "value == 0" fallback below.
                 div_to_skip.decompose()
 
         for input in soup.find_all("input", {"name": "f_id_abfallart[]"}):
@@ -986,8 +1050,9 @@ class AppAbfallplusDe:
 
         categories = {}
         for cat_id, name, subtitle in raw_categories:
-            if any(s_id in cat_id for s_id in self._needs_subtitle) or (
-                name_counts[name] > 1 and subtitle
+            if subtitle and (
+                any(s_id in cat_id for s_id in self._needs_subtitle)
+                or name_counts[name] > 1
             ):
                 name += " - " + subtitle
             categories[cat_id] = name

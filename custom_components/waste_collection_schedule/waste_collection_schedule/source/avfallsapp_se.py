@@ -25,6 +25,15 @@ TEST_CASES = {
         "api_key": "!secret avfallsapp_se_api_key",
         "service_provider": "soderkoping",
     },
+    "Teknik i Väst - Arvika/Eda": {
+        "api_key": "!secret avfallsapp_se_teknikivast_api_key",
+        "token": "!secret avfallsapp_se_teknikivast_token",
+        "service_provider": "teknikivast",
+    },
+    "Nodra - Norrköping": {
+        "api_key": "!secret avfallsapp_se_nodra_api_key",
+        "service_provider": "nodra",
+    },
 }
 
 HOW_TO_GET_ARGUMENTS_DESCRIPTION = {
@@ -58,6 +67,8 @@ _LOGGER = logging.getLogger(__name__)
 ICON_MAP = {
     "Tunna 1": Icons.RECYCLING,
     "Tunna 2": Icons.RECYCLING,
+    "Kärl 1": Icons.RECYCLING,
+    "Kärl 2": Icons.RECYCLING,
     "Hushållsavfall": Icons.GENERAL_WASTE,
     "Färgat glas": Icons.GLASS,
     "Ofärgat glas": Icons.GLASS,
@@ -66,6 +77,9 @@ ICON_MAP = {
     "Plast": Icons.PLASTIC_PACKAGING,
     "Tidning": Icons.NEWSPAPER,
     "Deponi": Icons.GENERAL_WASTE,
+    # Teknik i Väst (Arvika/Eda)
+    "Mat- och restavfall": Icons.GENERAL_WASTE,
+    "Papp och plast": Icons.RECYCLING,
 }
 
 SERVICE_PROVIDERS = {
@@ -98,6 +112,30 @@ SERVICE_PROVIDERS = {
         "supports_registration": True,
         "requires_token": False,
         "app_version": "2.1.3",
+    },
+    "sigtuna": {
+        "title": "Sigtuna (Sivab)",
+        "url": "https://www.sivab.se/",
+        "api_url": "https://sigtuna.avfallsapp.se/wp-json/nova/v1/",
+        "supports_registration": True,
+        "requires_token": False,
+    },
+    "teknikivast": {
+        "title": "Teknik i Väst (Arvika/Eda)",
+        "url": "https://teknikivast.se",
+        "api_url": "https://teknikivast.avfallsapp.se/api/nova/v1/",
+        "supports_registration": False,
+        "requires_token": True,
+        "app_version": "1.0.1.0",
+    },
+    "nodra": {
+        "title": "Nodra (Norrköping)",
+        "url": "https://nodra.se",
+        "api_url": "https://nodra.avfallsapp.se/wp-json/nova/v1/",
+        "supports_registration": False,
+        "requires_token": False,
+        # Public client token shipped inside the Nodra app, not a user secret.
+        "app_token": "U2lXIFK6e8mVI1kU8V0F9TDpWXhwx3QwsL2t36rZPc8PPtKXmhker6nze73chWyX",
     },
 }
 
@@ -142,6 +180,7 @@ class Source:
         self._requires_token = cfg.get("requires_token", False)
         self._supports_registration = cfg.get("supports_registration", True)
         self._app_version = cfg.get("app_version")
+        self._app_token = cfg.get("app_token")
 
         if self._requires_token and not self._api_key:
             raise SourceArgumentRequired(
@@ -162,6 +201,9 @@ class Source:
 
         if self._app_version:
             headers["X-App-Version"] = self._app_version
+
+        if self._app_token:
+            headers["X-App-Token"] = self._app_token
 
         if self._api_key:
             headers["X-App-Identifier"] = self._api_key
@@ -366,7 +408,7 @@ class Source:
                     )
                     continue
 
-                icon = ICON_MAP.get(waste_type, "mdi:trash-can")
+                icon = ICON_MAP.get(waste_type, Icons.GENERAL_WASTE)
 
                 if multi_config and address:
                     waste_type = f"{address} {waste_type}"

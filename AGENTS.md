@@ -2,7 +2,7 @@
 
 This file is written for AI coding assistants (Claude Code, Cursor, codex, Aider, etc.) helping contributors add or fix sources in this repository. GitHub Copilot reads `.github/copilot-instructions.md` instead — that file mirrors this one.
 
-For the full human-facing guide, see [`doc/contributing.md`](doc/contributing.md).
+For the full human-facing guide, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 > **Claude Code users:** Claude Code also reads [`CLAUDE.md`](CLAUDE.md) (a role-aware project guide) and exposes specialised slash commands. Use `/new-source` to be walked through investigating a provider, generating the source module, and submitting a PR. See [`.claude/agents/`](.claude/agents/) for the full list of available agents.
 
@@ -15,9 +15,22 @@ Two nested packages:
 
 Source modules live at `custom_components/waste_collection_schedule/waste_collection_schedule/source/<provider>.py`. Shared platforms (used by multiple sources) live at `.../service/<Platform>.py`.
 
-## Source module contract
+## New sources: branch and architecture
 
-Every file under `source/` must define:
+New Python sources must target `release/3.0.0` of `mampfes/hacs_waste_collection_schedule`. Base the feature branch on `release/3.0.0`; changing only the PR target does not convert a legacy implementation. Bug fixes for the current stable release still target `master`, and fixes to existing legacy sources do not require migration.
+
+New sources must use the `BaseSource` pipeline. New legacy-style sources with a hand-written `fetch()` are not accepted. Follow the [release branch contribution guide](https://github.com/mampfes/hacs_waste_collection_schedule/blob/release/3.0.0/doc/contributing_source.md), [source skeleton](https://github.com/mampfes/hacs_waste_collection_schedule/blob/release/3.0.0/doc/new_source_template.py), and [PR template](https://github.com/mampfes/hacs_waste_collection_schedule/blob/release/3.0.0/.github/PULL_REQUEST_TEMPLATE.md).
+
+- Declare metadata and typed `PARAMS` on `Source(BaseSource)`; use canonical waste types rather than a per-source icon map.
+- Compose shared retrievers, parsers, preprocessors, and transformers. Extend shared components under `service/` when needed rather than adding source-local retrieval/parsing steps or HTTP callbacks.
+- Record real `TEST_CASES` with `python tests/record_fixtures.py <module>` and commit the resulting `tests/fixtures/<module>/*.json`. Explain any genuine recording blocker in the PR summary.
+- Pipeline source documentation in `doc/source/` is generated from class metadata; do not hand-write or commit it.
+
+The legacy-specific contracts, icon rules, language rules, and examples below apply to existing sources on `master`. For new sources, use the release branch guide above.
+
+## Legacy source module contract (stable fixes)
+
+Every legacy file under `source/` must define:
 
 - `TITLE: str` — display name shown in the README and config flow.
 - `DESCRIPTION: str` — one-line summary.
@@ -43,7 +56,7 @@ The following are regenerated automatically by CI after every merge to `master`.
 - `custom_components/waste_collection_schedule/translations/{en,de,it,fr}.json`
 - `doc/ics/*.md` (generated from `doc/ics/yaml/*.yaml`)
 
-`doc/source/*.md` is **not** generated — you must create one manually for each new source.
+`doc/source/*.md` is hand-maintained for legacy sources on `master`. For pipeline sources on `release/3.0.0`, it is generated from class metadata and must not be committed.
 
 ## Icons
 
@@ -78,6 +91,23 @@ See `doc/contributing_source.md` for the full version of these rules.
 
 If the provider exposes an ICS feed, prefer adding a single YAML at `doc/ics/yaml/<name>.yaml` over writing a new source file. The generic `ics` source consumes it. Use `{%Y}` as a year placeholder if the URL embeds the current year. CI will regenerate the corresponding `doc/ics/<name>.md` automatically after merge — do not run `update_docu_links.py` in your PR branch.
 
+## Source ownership (encouraged for all new sources)
+
+If you add a new Python source, consider declaring yourself as an owner by adding `SOURCE_CODEOWNERS` to the module:
+
+```python
+SOURCE_CODEOWNERS = ["@your-github-handle"]
+```
+
+For a new ICS YAML provider, add the `codeowners` key:
+
+```yaml
+codeowners:
+  - "@your-github-handle"
+```
+
+Owners are automatically pinged and assigned when a bug report is filed for their source. This is the primary way maintainers know who to contact when a source breaks. Every handle must start with `@`.
+
 ## Common review rejections
 
 Things the maintainers consistently bounce in code review — avoid these from the start:
@@ -89,8 +119,9 @@ Things the maintainers consistently bounce in code review — avoid these from t
 - **Unsupported language codes in `PARAM_DESCRIPTIONS`, `PARAM_TRANSLATIONS`, or `HOW_TO_GET_ARGUMENTS_DESCRIPTION`.** Only `en`, `de`, `it`, `fr` are valid keys. Including any other code (e.g. `lt`, `nl`, `pl`) fails `test_source_has_necessary_parameters`. If a contributor wrote their `HOW_TO_GET_ARGUMENTS_DESCRIPTION` in only one language (e.g. `{"en": "..."}`) that is fine — do not add translations for the other languages. See the [HOW_TO_GET_ARGUMENTS_DESCRIPTION rules](#how_to_get_arguments_description-rules) section.
 - **Editing files in the "must not hand-edit" list above** — they get overwritten by CI after merge.
 - **Suppressing failures silently.** Returning `[]` on an HTTP error masks problems as "no upcoming collections".
-- **Unformatted code.** Run `black` and `isort` before committing (see Commands below).
+- **Unformatted code.** Run `ruff check --fix` and `ruff format` before committing (see Commands below).
 - **Raw `mdi:*` strings in `ICON_MAP`.** Use the canonical `Icons` enum (`from waste_collection_schedule import Icons`) so icons stay consistent across sources for the same logical waste category. See `custom_components/waste_collection_schedule/waste_collection_schedule/icons.py`.
+- **A dedicated `tests/test_<source>.py` unit-test file.** `TEST_CASES` plus a live run of `test_sources.py -s <name> -l` is the normal, expected coverage for a source — don't add a standalone test file just because it seems thorough. Default to not adding one; add it only when absolutely necessary, i.e. logic so non-trivial (a tricky date/regex parser, say) that `TEST_CASES` genuinely cannot exercise it, and even then mock any network calls — don't hit the live API from the test. With ~600 sources, one test file per source doesn't scale, and root `pytest.ini`'s `python_files` allowlist covers only `test_source_components.py` and `test_fetch_retry.py` — anything else in `tests/` is never collected by `pytest tests/` or CI.
 
 ## HOW_TO_GET_ARGUMENTS_DESCRIPTION rules
 
@@ -130,24 +161,22 @@ python -m pytest tests/
 cd custom_components/waste_collection_schedule/waste_collection_schedule/test
 python test_sources.py -s <source_name> -l
 
-# Format before every commit — REQUIRED on every file you change
-python -m black <path>
-python -m isort --profile black <path>
-
-# Lint
-python -m flake8 --extend-ignore=D100,D101,D102,D103,D104,D105,D106,D107,E501,W503,E203 <path>
+# Format + lint before every commit — REQUIRED on every file you change
+# ruff replaces black, flake8 and isort
+ruff check --fix <path>
+ruff format <path>
 
 # Activate the git pre-commit hook (run once after cloning — enforces formatting automatically)
 pre-commit install
 ```
 
-`pre-commit run --all-files` runs the full lint suite (black, flake8, isort, mypy, codespell, bandit, pyupgrade, yamlfmt).
+`pre-commit run --all-files` runs the full lint suite (ruff lint + format, mypy, codespell, bandit, pyupgrade, yamlfmt).
 
-> **AI agents:** Always run `python -m black <path> && python -m isort --profile black <path>` on every changed file before calling `git commit`. The pre-commit hook enforces this for human contributors; agents must do it explicitly.
+> **AI agents:** Always run `ruff check --fix <path> && ruff format <path>` on every changed file before calling `git commit`. The pre-commit hook enforces this for human contributors; agents must do it explicitly.
 
 > **Note:** Do not run `update_docu_links.py` in a PR branch. The `Update Documentation` CI workflow runs it automatically on every push to `master` (post-merge) and commits the generated output.
 
-## Example sources to model on
+## Legacy examples (stable fixes only)
 
 - HTML scraping (BeautifulSoup): [`source/birmingham_gov_uk.py`](custom_components/waste_collection_schedule/waste_collection_schedule/source/birmingham_gov_uk.py)
 - ICS-based: [`source/stadtreinigung_hamburg.py`](custom_components/waste_collection_schedule/waste_collection_schedule/source/stadtreinigung_hamburg.py)
@@ -156,8 +185,8 @@ pre-commit install
 ## Pull request checklist
 
 1. Source module passes `test_sources.py -s <name>` against real TEST_CASES.
-2. New `doc/source/<name>.md` exists.
+2. Pipeline source documentation is generated from class metadata; do not commit `doc/source/<name>.md`. Keep legacy documentation accurate when fixing an existing stable source.
 3. `python -m pytest tests/` passes locally.
-4. Changed files are formatted with `black` and `isort --profile black`.
-5. PR targets `master` of `mampfes/hacs_waste_collection_schedule`.
+4. Changed files are formatted and linted with `ruff format` and `ruff check --fix`.
+5. New-source PRs target `release/3.0.0` of `mampfes/hacs_waste_collection_schedule` and use `BaseSource` with recorded fixtures. Stable bug fixes target `master`; existing legacy sources need not be migrated for a fix.
 6. Do **not** commit changes to `README.md`, `info.md`, `sources.json`, `source_metadata.json`, `translations/*.json`, or `doc/ics/*.md` — CI regenerates these after merge.

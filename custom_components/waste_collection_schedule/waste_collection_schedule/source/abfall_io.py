@@ -35,6 +35,13 @@ TEST_CASES = {
         "f_id_strasse": 763,
         # "f_abfallarten": [31, 17, 19, 218]
     },
+    "Landshut (f_abfallarten as comma separated string)": {
+        "key": "bd0c2d0177a0849a905cded5cb734a6f",
+        "f_id_kommune": 2655,
+        "f_id_bezirk": 2655,
+        "f_id_strasse": 763,
+        "f_abfallarten": "31,17,19,218",
+    },
     "Schoenmackers": {
         "key": "e5543a3e190cb8d91c645660ad60965f",
         "f_id_kommune": 3682,
@@ -54,6 +61,25 @@ TEST_CASES = {
         "f_id_strasse": 621,
         "f_id_strasse_hnr": 872,
         "f_abfallarten": [27, 28, 17, 67],
+    },
+    "Landkreis Prignitz, Gemeinde Karstädt, Blüthen": {
+        "key": "798f59a75627f5d7686dab0c7226c877",
+        "f_id_kommune": 3229,
+        "f_id_bezirk": 31,
+        "f_id_strasse": 322,
+        "f_id_strasse_hnr": 323,
+    },
+    "Landkreis Prignitz, Gemeinde Karstädt, restliche Straßen": {
+        "key": "798f59a75627f5d7686dab0c7226c877",
+        "f_id_kommune": 3229,
+        "f_id_bezirk": 41,
+        "f_id_strasse": 333,
+        "f_id_strasse_hnr": 333,
+    },
+    "Landkreis Landshut, Altfraunhofen, Am Bäckerfeld": {
+        "key": "04b7561b94f2cbaa171cd85bb6aa56de",
+        "f_id_kommune": 3791,
+        "f_id_strasse": 314,
     },
 }
 _LOGGER = logging.getLogger(__name__)
@@ -84,20 +110,39 @@ class HiddenInputParser(HTMLParser):
 class Source:
     def __init__(
         self,
-        key,
-        f_id_kommune,
-        f_id_strasse,
-        f_id_bezirk=None,
-        f_id_strasse_hnr=None,
-        f_abfallarten=[],
+        key: str,
+        f_id_kommune: str | int,
+        f_id_strasse: str | int,
+        f_id_bezirk: str | int | None = None,
+        f_id_strasse_hnr: str | int | None = None,
+        f_abfallarten: list[str] | str | None = None,
     ):
+        if isinstance(f_abfallarten, str):
+            # UI config flow stores this as a comma separated string
+            f_abfallarten = [x.strip() for x in f_abfallarten.split(",") if x.strip()]
+        elif f_abfallarten is None:
+            f_abfallarten = []
         self._key = key
         self._kommune = f_id_kommune
         self._bezirk = f_id_bezirk
         self._strasse = f_id_strasse
         self._strasse_hnr = f_id_strasse_hnr
-        self._abfallarten = f_abfallarten  # list of integers
+        self._abfallarten = f_abfallarten  # list of waste type ids
         self._ics = ICS()
+
+    def _step(self, waction: str, args: dict) -> dict:
+        r = requests.post(
+            "https://api.abfall.io",
+            params={"key": self._key, "modus": MODUS_KEY, "waction": waction},
+            data=args,
+            headers=HEADERS,
+            timeout=30,
+        )
+        r.raise_for_status()
+        p = HiddenInputParser()
+        p.feed(r.text)
+        args.update(p.args)
+        return args
 
     def fetch(self):
         # get token
@@ -107,8 +152,10 @@ class Source:
         if r.status_code == 401:
             raise ValueError(
                 f"API key '{self._key}' is no longer valid for the legacy abfall.io API. "
-                "This provider may have migrated to the new abfall.io v3 API, which is not yet supported. "
-                "See https://github.com/mampfes/hacs_waste_collection_schedule/issues/3788"
+                "This provider has likely migrated to the new abfall.io v3 API. "
+                "Please switch to the 'Abfall.IO / AbfallPlus (GraphQL)' source (abfall_io_graphql) instead, "
+                "which supports the v3 API. "
+                "See https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/source/abfall_io_graphql.md"
             )
         r.raise_for_status()
 
@@ -120,19 +167,32 @@ class Source:
         args = p.args
 
         args["f_id_kommune"] = self._kommune
-        args["f_id_strasse"] = self._strasse
 
+        # For services with a bezirk (district) selection, go through the
+        # intermediate steps so that f_posts_json[] accumulates the correct
+        # server-side state for each step, which is required for the final
+        # export to return results.
         if self._bezirk is not None:
             args["f_id_bezirk"] = self._bezirk
+            args = self._step("auswahl_bezirk_set", args)
 
-        if self._strasse_hnr is not None:
-            args["f_id_strasse_hnr"] = self._strasse_hnr
+            args["f_id_strasse"] = self._strasse
+            args = self._step("auswahl_strasse_set", args)
+
+            if self._strasse_hnr is not None:
+                args["f_id_strasse_hnr"] = self._strasse_hnr
+                args = self._step("auswahl_hnr_set", args)
+        else:
+            args["f_id_strasse"] = self._strasse
+
+            if self._strasse_hnr is not None:
+                args["f_id_strasse_hnr"] = self._strasse_hnr
 
         for i in range(len(self._abfallarten)):
             args[f"f_id_abfalltyp_{i}"] = self._abfallarten[i]
 
         args["f_abfallarten_index_max"] = len(self._abfallarten)
-        args["f_abfallarten"] = ",".join(map(lambda x: str(x), self._abfallarten))
+        args["f_abfallarten"] = ",".join(str(x) for x in self._abfallarten)
 
         now = datetime.datetime.now()
         date2 = now + datetime.timedelta(days=365)

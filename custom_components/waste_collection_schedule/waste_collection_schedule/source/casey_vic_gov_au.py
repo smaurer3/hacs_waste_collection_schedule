@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime
 
 import requests
@@ -71,10 +72,20 @@ PARAM_TRANSLATIONS = {
     },
 }
 
-# Collection date property name prefix / postfix
-_PREV_STRING = "Prev"
-_NEXT_STRING = "Next"
-_DATE_STRING = "Date"
+# Collection dates arrive as one property per bin and per direction, e.g.
+# "NextGarbageDate" and "PreviousRecycleDate". The bin name is whatever sits
+# between the two, so new bins need no mapping here -- Glass appeared that way.
+#
+# The council writes the backward-looking prefix as "Previous"; matching a bare
+# "Prev" and stripping it by substring turned "PreviousGarbageDate" into
+# "iousGarbage", which the app then showed as a bin of its own beside the real
+# "Garbage" -- eight bins, four of them nonsense. Anchoring the whole key also
+# keeps a bin whose own name contains "Date" or "Next" intact.
+_COLLECTION_DATE_KEY_RE = re.compile(r"^(?:Next|Prev(?:ious)?)(?P<name>.+)Date$")
+
+
+def _normalise_address(address: str) -> str:
+    return " ".join(str(address).split()).casefold()
 
 
 class Source:
@@ -131,26 +142,33 @@ class Source:
                 f"The provided address returned no results. Check your address on {SEARCH_PAGE_URL}",
             )
 
-        if len(search_results["result"]) > 1:
-            address_suggestions = [x["full_address"] for x in search_results["result"]]
+        results = search_results["result"]
+        # The search matches substrings, so "8 Example Road ..." also returns
+        # 58, 78, 88 and 148. Without this, picking the right suggestion loops.
+        wanted = _normalise_address(self._street_address)
+        exact = [
+            x
+            for x in results
+            if _normalise_address(x.get("full_address", "")) == wanted
+        ]
+        if len(exact) == 1:
+            result = exact[0]
+        elif len(results) == 1:
+            result = results[0]
+        else:
+            address_suggestions = [x["full_address"] for x in results]
             raise SourceArgAmbiguousWithSuggestions(
                 _STREET_ADDRESS_ARG_NAME, self._street_address, address_suggestions
             )
 
         entries = []
 
-        for key, value in search_results["result"][0].items():
-            # properties come through like "NextGarbageDate", "NextRecycleDate" or "PrevGardenDate" etc
-            # extracting waste type name from the middle of "Next{x}Date" to support future waste types without direct mapping
-            if key.endswith(_DATE_STRING) and (
-                key.startswith(_NEXT_STRING) or key.startswith(_PREV_STRING)
-            ):
-                name = (
-                    key.replace(_DATE_STRING, "")
-                    .replace(_NEXT_STRING, "")
-                    .replace(_PREV_STRING, "")
-                )
-
+        for key, value in result.items():
+            # properties come through like "NextGarbageDate" and
+            # "PreviousGardenDate"; the bin name is the middle
+            match = _COLLECTION_DATE_KEY_RE.match(key)
+            if match and value:
+                name = match.group("name")
                 date = datetime.strptime(value, "%Y-%m-%d").date()
                 icon = ICON_MAP[name] if name in ICON_MAP else None
                 entries.append(Collection(date=date, t=name, icon=icon))

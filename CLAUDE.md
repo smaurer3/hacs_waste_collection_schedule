@@ -63,7 +63,7 @@ python -m pytest tests/test_source_components.py -k "test_name"
 cd custom_components/waste_collection_schedule/waste_collection_schedule/test
 python test_sources.py -s <source_name> -l
 
-# All pre-commit hooks (black, flake8, isort, mypy, codespell, bandit, pyupgrade, yamlfmt)
+# All pre-commit hooks (ruff lint + format, mypy, codespell, bandit, pyupgrade, yamlfmt)
 pre-commit run --all-files
 
 # Install dependencies
@@ -76,9 +76,7 @@ pip install -r requirements.txt
 
 ## Linting and formatting
 
-- **black**: `--safe --quiet`
-- **flake8** ignores: D100–D107, E501, W503, E203
-- **isort**: profile=black, multi-line=3, trailing-comma
+- **ruff** (replaces black, flake8 and isort): line-length 88, lint select `E,F,W,I` (pycodestyle + pyflakes + isort, profile=black), ignore `E203,E501,E721`. `ruff format` mirrors black; `ruff check` mirrors flake8 + isort. Config lives in `.pre-commit-config.yaml` / `pyproject.toml`.
 - **mypy**: `--ignore-missing-imports --explicit-package-bases`
 - **bandit**: config at `tests/bandit.yaml`
 - **pyupgrade**: targets Python 3.7+
@@ -87,8 +85,8 @@ pip install -r requirements.txt
 For a single source file edit:
 
 ```bash
-python -m black <file>
-python -m isort --profile black <file>
+ruff check --fix <file>
+ruff format <file>
 ```
 
 ---
@@ -112,6 +110,7 @@ Optional:
 - `TITLE_LANG` / `EXTRA_INFO_LANG` — non-English titles.
 - `HOW_TO_GET_ARGUMENTS_DESCRIPTION` — per-language guidance shown in the config wizard.
 - `PARAM_TRANSLATIONS` / `PARAM_DESCRIPTIONS` — per-language argument labels and descriptions. Currently still required on master (read by `update_docu_links.py` to generate `translations/en.json`). A future i18n YAML migration will replace these but is not yet merged — keep them.
+- `SOURCE_CODEOWNERS` — `list[str]` of GitHub handles (e.g. `["@your-handle"]`) who maintain this source. Each entry must start with `@`. `update_docu_links.py` writes these into `.github/source_owners.json`; a GitHub Action pings+assigns the listed owners when a bug report names this source. **Strongly encouraged for all new sources.** ICS YAML providers use the equivalent `codeowners:` key in their `.yaml` file.
 
 ### CI-enforced structural rules
 
@@ -144,7 +143,8 @@ If a site returns 403 with regular `requests`, switch to `curl_cffi` — it bypa
 - ❌ `if __name__ == "__main__":` blocks or standalone-script boilerplate.
 - ❌ Dummy parameters (e.g. `_`) just to satisfy the config GUI.
 - ❌ Login-required sources. The project only supports publicly accessible endpoints.
-- ❌ Sources for providers already covered by a shared platform — check `recollect.yaml`, `mein_abfallkalender_online.yaml`, `recyclecoach_com.py`'s `EXTRA_INFO` list, `c_trace_de`, and the other shared platforms first.
+- ❌ Sources for providers already covered by a shared platform — check `recollect.yaml`, `mein_abfallkalender_online.yaml`, `recyclecoach_com.py`'s `EXTRA_INFO` list, `c_trace_de`, `service/OpenCities.py` (OpenCities/MyArea council CMS widget — `api/v1/myarea/search` + `ocapi/Public/myarea/wasteservices` endpoints), and the other shared platforms first.
+- ❌ A dedicated `tests/test_<source>.py` unit-test file. `TEST_CASES` plus a live run of `test_sources.py -s <name> -l` is the normal, expected coverage — that's what reviewers actually check. Do not add a standalone test file unless it is absolutely necessary: logic so non-trivial (a tricky date/regex parser, say) that `TEST_CASES` genuinely cannot exercise it, and even then mock any network calls rather than hitting the live API. Default to not adding one. With ~600 sources, a test file per source doesn't scale, and root `pytest.ini`'s `python_files` allowlist covers only `test_source_components.py` and `test_fetch_retry.py` — files outside that allowlist are never collected by `pytest tests/` or CI. Treat that as reason for restraint, not as an invitation to "fix" it unprompted in an unrelated PR.
 
 ---
 
@@ -179,13 +179,14 @@ These are the issues that come up most often in PR review. Avoid them and your P
 2. **Generated files in the diff**. See list above. Revert before pushing.
 3. **Missing `doc/source/<id>.md`**. Required for every new source; create it manually.
 4. **Hardcoded data**. Fetch live; do not paste a schedule.
-5. **Provider already covered by a shared platform** (Recollect, RecycleCoach, ICS YAML, Publidata, IntraMaps, etc.). Check first.
+5. **Provider already covered by a shared platform** (Recollect, RecycleCoach, ICS YAML, Publidata, IntraMaps, OpenCities/MyArea, etc.). Check first.
 6. **Generic `Exception`**. Use `SourceArgumentNotFound` / `SourceArgumentNotFoundWithSuggestions`.
 7. **403 from a Cloudflare site**. Switch to `curl_cffi`.
 8. **Login-required**. Not supported — the project only consumes public endpoints.
 9. **Running `update_docu_links.py` in a PR branch**. Don't — CI handles it post-merge.
 10. **Editing translations directly**. The `config.step.args_*` sections are generated. Hand-edit only `options.step.init` (in the outer `translations/*.json`).
 11. **Raw `mdi:*` strings in `ICON_MAP`**. Use the `Icons` enum from `waste_collection_schedule` (catalogue at `waste_collection_schedule/icons.py`). This keeps icons consistent across sources for the same logical waste category — see #2813.
+12. **Adding a `tests/test_<source>.py` file**. Not standard coverage — see "What NOT to do" above. Only justified when absolutely necessary; `TEST_CASES` + a live `test_sources.py -s <name> -l` run is what reviewers expect otherwise.
 
 ---
 

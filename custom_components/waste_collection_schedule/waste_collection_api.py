@@ -109,9 +109,13 @@ class WasteCollectionApi:
             self._update_sensors_callback()
             return
 
+        fetch_succeeded = True
         for shell in self._source_shells:
-            shell.fetch()
-        self._last_fetch_date = today
+            if not shell.fetch():
+                fetch_succeeded = False
+
+        if fetch_succeeded:
+            self._last_fetch_date = today
 
         self._update_sensors_callback()
 
@@ -126,7 +130,9 @@ class WasteCollectionApi:
     def _fetch_callback(self, *_):
         async_call_later(
             self._hass,
-            randrange(0, 60 * self._random_fetch_time_offset),
+            randrange(0, 60 * self._random_fetch_time_offset)
+            if self._random_fetch_time_offset > 0
+            else 0,
             self._fetch_now_callback,
         )
 

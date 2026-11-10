@@ -33,6 +33,7 @@ waste_collection_schedule:
         district: district
         house_number: house_number
         additional_sides_matcher: additional matching parameter
+        region: region
         app: app
         language: pl
         g1: G1
@@ -80,7 +81,22 @@ waste_collection_schedule:
         additional_sides_matcher: Klienci indywidualni
 ```
 
-Worth to mention that district, street, house_number and additional_sides_matcher are optional parameters if your city doesn't require one.
+```yaml
+waste_collection_schedule:
+  sources:
+    - name: ecoharmonogram_pl
+      args:
+        town: Ramiszów
+        house_number: "200"
+        additional_sides_matcher: Zabudowa jednorodzinna
+        region: Nowy Ramiszów
+```
+
+Worth to mention that district, street, house_number, additional_sides_matcher and region are optional parameters if your city doesn't require one.
+
+## Towns requiring `region` argument
+
+Some towns split the same street into several collection areas (regions), for example Ramiszów is split into "Nowy Ramiszów" and "Stary Ramiszów". If your street matches more than one region, you will get an error listing the available regions; set `region` to the one that applies to you. Leave it empty otherwise.
 
 ## Towns requiring `community` argument
 
@@ -89,8 +105,9 @@ The `community` argument is a numeric ID that can be found in the plugin URL of 
 
 | Community ID | Town |
 | ------------ | ---- |
-| 108 | Gdańsk |
+| 23 | Wodzisław Śląski |
 | 60 | Rzeszów |
+| 108 | Gdańsk |
 
 ## Keep in mind
 

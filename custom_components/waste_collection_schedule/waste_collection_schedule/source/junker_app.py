@@ -274,6 +274,7 @@ SERVICE_PROVIDERS = {
     "Cooperativa Trasforma",
     "Patti - Pizzo Pippo",
     "Noventa di Piave",
+    "Novara",
     "Palata",
     "Monte di Procida - DM Technology Srl",
     "Tricase",
@@ -325,6 +326,10 @@ SERVICE_PROVIDERS = {
     "Broni",
     "San Cipriano Po",
     "Stradella",
+    "Torre de' Passeri",
+    "Scalea",
+    "San Giovanni Teatino",
+    "Lu e Cuccaro Monferrato",
 }
 
 
@@ -348,6 +353,15 @@ TEST_CASES = {
     "Mosciano Sant'Angelo": {"municipality": "Mosciano Sant'Angelo"},
     "Lodè": {"municipality": "Lodè", "area": "Utenze non domestiche"},
     "Udine": {"municipality": "Udine", "area": "Zona 2-4-5-6 - Utenze domestiche"},
+    "Torre de' Passeri": {
+        "municipality": "Torre de' Passeri",
+        "area": "Utenze domestiche",
+    },
+    "Scalea": {"municipality": "Scalea"},
+    "San Giovanni Teatino, Zona A": {
+        "municipality": "San Giovanni Teatino",
+        "area": "Zona A",
+    },
 }
 
 
@@ -361,8 +375,8 @@ class Source(Junker):
         except AreaRequired as e:
             raise SourceArgumentRequiredWithSuggestions(
                 "area", "required for this municipality", [a[0] for a in e.areas]
-            )
+            ) from e
         except AreaNotFound as e:
             raise SourceArgumentNotFoundWithSuggestions(
                 "area", self._area, [a[0] for a in e.areas]
-            )
+            ) from e

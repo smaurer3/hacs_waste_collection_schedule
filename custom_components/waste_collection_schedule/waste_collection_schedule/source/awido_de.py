@@ -253,6 +253,11 @@ SERVICE_MAP = [
         "service_id": "koenigstein",
     },
     {
+        "title": "EBU Ulm",
+        "url": "https://www.ebu-ulm.de/",
+        "service_id": "ebu",
+    },
+    {
         "title": "Anzing",
         "url": "https://www.lra-ebe.de/",
         "service_id": "ebe",
@@ -396,6 +401,11 @@ SERVICE_MAP = [
         "service_id": "ebe",
         "default_params": {"city": "Zorneding"},
     },
+    {
+        "title": "Abfallwirtschaft Altenburger Land",
+        "url": "https://www.awb-altenburg.de/",
+        "service_id": "awb-altenburg",
+    },
 ]
 
 TEST_CASES = {
@@ -403,6 +413,10 @@ TEST_CASES = {
         "customer": "gifhorn",
         "city": "Hankensbüttel",
         "street": "Allersehl",
+    },
+    "Altenburg, Langenleuba-Niederhain": {
+        "customer": "awb-altenburg",
+        "city": "Langenleuba-Niederhain",
     },
     "coburg rödental krötenleite 4": {
         "customer": "coburg",
@@ -454,6 +468,21 @@ TEST_CASES = {
         "street": "Karwendelweg",
     },
     "Gießen": {"customer": "lkgi", "city": "Langgöns", "street": "Hauptstraße"},
+    "Gotha, Ahornweg": {
+        "customer": "gotha",
+        "city": "Gotha",
+        "street": "Ahornweg",
+    },
+    "Gotha, Drei Gleichen OT Günthersleben, Mittelstr": {
+        "customer": "gotha",
+        "city": "Drei Gleichen OT Günthersleben",
+        "street": "Mittelstr",
+    },
+    "Ulm, Bahnhofplatz": {
+        "customer": "ebu",
+        "city": "Ulm",
+        "street": "Bahnhofplatz",
+    },
 }
 
 _LOGGER = logging.getLogger(__name__)
@@ -552,10 +581,8 @@ class Source:
                 hsnbr_to_oid = {
                     hsnbr["value"].strip().lower(): hsnbr["key"] for (hsnbr) in hsnbrs
                 }
-                if (
-                    len(hsnbr_to_oid) == 0
-                    or len(hsnbr_to_oid) == 1
-                    and "" in hsnbr_to_oid
+                if len(hsnbr_to_oid) == 0 or (
+                    len(hsnbr_to_oid) == 1 and "" in hsnbr_to_oid
                 ):
                     _LOGGER.warning(
                         "No housenumbers found for street, using street only"

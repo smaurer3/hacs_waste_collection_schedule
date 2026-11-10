@@ -1,16 +1,24 @@
+---
 name: Source Request
 description: Request that a municipality or region is supported
-title: "[Source Request]: "
-labels: ["source request"]
+labels: [source request]
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for requesting a new source!
 
+        **Title:** please enter a short title such as `France, Frasnoy` (country, municipality). The `[Source Request]: ` prefix is added automatically.
+
         **Before submitting**, please check if your provider is already supported:
         - Search the [source list](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/README.md) for your municipality name
         - Check if your provider uses a platform we already support (Recollect, ArcGIS, ICS feeds, Abfall+ app, etc.)
+
+        ---
+
+        ### ⚠️ PDF-only providers will not be implemented by the maintainers
+
+        We receive many requests for providers that only publish their schedule as a PDF. **The maintainers do not have the capacity to implement these.** Such requests stay open only in the hope that a community member with a particular interest in PDF parsing picks them up. If you want to see it happen, please implement it yourself (see below) or find someone who will.
 
         ---
 
@@ -20,7 +28,7 @@ body:
 
         **The good news:** you don't need to be a programmer. Free AI coding agents (Claude, Copilot, Cursor, Codex, etc.) can often implement a new source in under an hour — even if you've never written Python before. This repository includes a dedicated guide for exactly this:
 
-        👉 **[AGENTS.md](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/AGENTS.md)** — step-by-step instructions written for AI assistants. Point your coding agent at this file and describe your waste provider. Then open a [pull request](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/doc/contributing.md).
+        👉 **[AGENTS.md](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/AGENTS.md)** — step-by-step instructions written for AI assistants. Point your coding agent at this file and describe your waste provider. Then open a [pull request](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/CONTRIBUTING.md).
 
         If your attempt didn't work out, that's absolutely fine — paste what you tried in the Additional Information field below and it will help whoever picks this up.
   - type: input
@@ -51,13 +59,14 @@ body:
     id: format
     attributes:
       label: Data Format
-      description: How does the provider make collection dates available?
+      description: How does the provider make collection dates available? Note that requests for PDF-only providers will not be implemented by the maintainers,
+        only by community members who take them on.
       options:
         - ICS / iCal calendar file
         - HTML webpage (dates visible on the page)
         - JSON / REST API
         - Mobile app only (iOS/Android)
-        - PDF download only
+        - PDF download only (not implemented by maintainers, community contribution needed)
         - Other (describe in additional information)
     validations:
       required: true
@@ -94,7 +103,8 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: I have searched the [source list](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/README.md) and my provider is not already supported
+        - label: I have searched the [source list](https://github.com/mampfes/hacs_waste_collection_schedule/blob/master/README.md) and my provider is not
+            already supported
           required: true
         - label: I have provided a working example address (not my own) for testing
           required: true

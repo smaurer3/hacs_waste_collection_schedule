@@ -2,17 +2,21 @@
 
 These are project-specific instructions for GitHub Copilot when assisting contributors. The full set of contributor guidance lives in [`AGENTS.md`](../AGENTS.md) at the repo root — that file applies equally here.
 
-For the human-facing guide, see [`doc/contributing.md`](../doc/contributing.md).
+For the human-facing guide, see [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Quick reference
 
 **Project layout:** Two nested packages. The HA integration layer is `custom_components/waste_collection_schedule/`. The core library is the inner `custom_components/waste_collection_schedule/waste_collection_schedule/` (importable as `waste_collection_schedule`). Source modules live at `.../source/<provider>.py`.
 
-**Source contract:** Every source file defines `TITLE`, `DESCRIPTION`, `URL`, `TEST_CASES`, and a `Source` class with `fetch() -> list[Collection]`. Use `Collection(date, t, icon=None, picture=None)` as the data model.
+**New sources:** Base the feature branch on `release/3.0.0` and target that branch. New Python sources must use the `BaseSource` pipeline with class metadata, typed `PARAMS`, canonical waste types, and shared components; new legacy-style sources with a hand-written `fetch()` are not accepted. Record `TEST_CASES` with `python tests/record_fixtures.py <module>` and commit `tests/fixtures/<module>/*.json` (or explain a genuine recording blocker). Pipeline source documentation is generated; do not commit `doc/source/<name>.md`. Follow the [release branch contribution guide](https://github.com/mampfes/hacs_waste_collection_schedule/blob/release/3.0.0/doc/contributing_source.md) and PR template.
+
+**Legacy source contract (stable fixes only):** Every legacy source file defines `TITLE`, `DESCRIPTION`, `URL`, `TEST_CASES`, and a `Source` class with `fetch() -> list[Collection]`. Use `Collection(date, t, icon=None, picture=None)` as the data model.
 
 **Don't hand-edit generated files.** `README.md`, `info.md`, `sources.json`, `source_metadata.json`, `translations/{en,de,it,fr}.json`, and `doc/ics/*.md` are all produced by `update_docu_links.py`. CI regenerates them automatically after every merge to `master` — do not run the script in your PR branch, and do not commit changes to these files.
 
 **ICS feeds:** Prefer adding a YAML at `doc/ics/yaml/<name>.yaml` over a new source file. The generic `ics` source consumes it. Use `{%Y}` for a year placeholder. CI regenerates `doc/ics/<name>.md` after merge — do not run `update_docu_links.py` in your PR branch.
+
+The legacy parameter/language rules below apply to existing sources on `master`; for new pipeline sources use the release branch guide above.
 
 ## Things reviewers consistently reject
 
@@ -24,16 +28,34 @@ For the human-facing guide, see [`doc/contributing.md`](../doc/contributing.md).
 - Adding language keys to `HOW_TO_GET_ARGUMENTS_DESCRIPTION` that the contributor did not write — it is fine to provide the description in only one language. Reviewers and AI agents must not inject translations for languages the contributor did not include.
 - Committing generated files (`README.md`, `sources.json`, etc.) — CI handles these post-merge.
 - Silent `[]` returns on HTTP errors (masks failures as "no upcoming collections").
-- Unformatted code — always run `python -m black <path> && python -m isort --profile black <path>` before committing.
+- Unformatted code — always run `ruff check --fix <path> && ruff format <path>` before committing.
+- Adding a dedicated `tests/test_<source>.py` unit-test file. `TEST_CASES` plus a live run of `test_sources.py -s <name> -l` is normal coverage — default to not adding a standalone test file; only do so when absolutely necessary (logic so non-trivial, e.g. a tricky date/regex parser, that `TEST_CASES` genuinely cannot exercise it), and mock any network calls in it. One test file per source doesn't scale across ~600 sources, and these files currently aren't even collected by CI's `pytest.ini`.
 
 ## Useful commands
 
 ```bash
 python -m pytest tests/                                          # run automated test suite
 python custom_components/.../test/test_sources.py -s <name> -l  # test one source
-python -m black <path> && python -m isort --profile black <path> # format before committing
-python -m flake8 --extend-ignore=D100,D101,D102,D103,D104,D105,D106,D107,E501,W503,E203 <path>
+ruff check --fix <path> && ruff format <path>                    # lint + format before committing (replaces flake8, isort, black)
 pre-commit install                                               # activate git hook (run once after cloning)
 ```
 
-PRs target `master` of `mampfes/hacs_waste_collection_schedule`.
+New-source PRs target `release/3.0.0` of `mampfes/hacs_waste_collection_schedule`. Bug fixes for the current stable release target `master`; existing legacy sources do not require migration for a fix.
+
+## Copilot commands and agents
+
+Copilot now mirrors the Claude command/agent setup through repository-scoped prompt and chatmode files:
+
+- Commands (`.github/prompts/`):
+  - `new-source.prompt.md`
+  - `review-pr.prompt.md`
+  - `review-issue.prompt.md`
+  - `cleanup.prompt.md`
+- Agent equivalents (`.github/chatmodes/`):
+  - `source-investigator.chatmode.md`
+  - `source-implementer.chatmode.md`
+  - `pr-reviewer.chatmode.md`
+  - `pr-executor.chatmode.md`
+  - `issue-triager.chatmode.md`
+  - `issue-executor.chatmode.md`
+  - `repo-cleanup.chatmode.md`

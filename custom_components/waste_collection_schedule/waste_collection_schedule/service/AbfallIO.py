@@ -13,11 +13,6 @@ SERVICE_MAP = [
         "service_id": "9583a2fa1df97ed95363382c73b41b1b",
     },
     {
-        "title": "ASO Abfall-Service Osterholz",
-        "url": "https://www.aso-ohz.de/",
-        "service_id": "040b38fe83f026f161f30f282b2748c0",
-    },
-    {
         "title": "Landkreis Bayreuth",
         "url": "https://www.landkreis-bayreuth.de/",
         "service_id": "951da001077dc651a3bf437bc829964e",
@@ -26,11 +21,6 @@ SERVICE_MAP = [
         "title": "Landkreis Calw",
         "url": "https://www.kreis-calw.de/",
         "service_id": "690a3ae4906c52b232c1322e2f88550c",
-    },
-    {
-        "title": "Entsorgungsbetriebe Essen",
-        "url": "https://www.ebe-essen.de/",
-        "service_id": "9b5390f095c779b9128a51db35092c9c",
     },
     {
         "title": "Abfallwirtschaft Landkreis Freudenstadt",
@@ -137,11 +127,8 @@ SERVICE_MAP = [
         "url": "https://www.azv-rme.de/",
         "service_id": "8303df78b822c30ff2c2f98e405f86e6",
     },
-    {
-        "title": "Team Orange (Landkreis Würzburg)",
-        "url": "https://www.team-orange.info/",
-        "service_id": "3701fd1ff111f63996ab46a448669ea3",
-    },
+    # Team Orange (Landkreis Würzburg) migrated off abfall.io; their service key
+    # now returns 403. Use the dedicated `team_orange_de` source instead. See #6041.
     {
         "title": "Landkreis Cuxhaven",
         "url": "https://www.landkreis-cuxhaven.de/",
@@ -153,13 +140,73 @@ SERVICE_MAP = [
         "service_id": "d287412901d68d66825e588a60c94641",
     },
     {
-        "title": "ASG Nordsachsen",
-        "url": "https://www.asg-nordsachsen.de/",
-        "service_id": "1d78841c5d7fc43ebe52b9dc01f6b962",
-    },
-    {
         "title": "AVR Kommunal, Rhein-Neckar-Kreis",
         "url": "https://www.avr-kommunal.de/",
         "service_id": "914fb9d000a9a05af4fd54cfba478860",
+    },
+    {
+        "title": "AWG Abfallwirtschaft Landkreis Calw",
+        "url": "https://www.awg-info.de/",
+        "service_id": "0813ea99f520c462373386564a99a51e",
+    },
+    {
+        "title": "Amt Bad Wilsnack/Weisen (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "1e9592418582666e2a5d1c62b2683435",
+    },
+    {
+        "title": "Gemeinde Groß Pankow (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "af91b65d2753a219309072837d8ea4e1",
+    },
+    {
+        "title": "Gemeinde Gumtow (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "3cefa45ab357d231891bb497253c630f",
+    },
+    {
+        "title": "Gemeinde Karstädt (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "798f59a75627f5d7686dab0c7226c877",
+    },
+    {
+        "title": "Amt Lenzen-Elbtalaue (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "bb937857acd951dfc8de5be8b8a49f6d",
+    },
+    {
+        "title": "Amt Meyenburg (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "4638881e7bebe6869e2e86de5f8aa09e",
+    },
+    {
+        "title": "Stadt Perleberg (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "9fb3e2e5498e825250105ee272102a7b",
+    },
+    {
+        "title": "Gemeinde Plattenburg (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "a0461612534502273c518e28d4f6f1e4",
+    },
+    {
+        "title": "Stadt Pritzwalk (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "d92f59ef4066ae6d299478996d1d8430",
+    },
+    {
+        "title": "Amt Putlitz/Berge (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "4f06df48f154246415e57ce12b26abe5",
+    },
+    {
+        "title": "Stadt Wittenberge (Landkreis Prignitz)",
+        "url": "https://www.landkreis-prignitz.de/",
+        "service_id": "b870ecfa6e1f882680758d374ba3fa2d",
+    },
+    {
+        "title": "Landkreis Landshut",
+        "url": "https://www.landkreis-landshut.de/",
+        "service_id": "04b7561b94f2cbaa171cd85bb6aa56de",
     },
 ]

@@ -1,7 +1,8 @@
+---
 name: Source Defect
 description: A previously working source has stopped working or returns incorrect data
-title: "[Source Defect]: "
-labels: ["source defect"]
+title: '[Source Defect]: '
+labels: [source defect]
 body:
   - type: markdown
     attributes:
@@ -38,6 +39,21 @@ body:
       label: Source Configuration
       description: Your source configuration from configuration.yaml or the UI. Use example addresses, not your own.
       render: YAML
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Integration Version
+      description: Which version of the integration are you running?
+      placeholder: ex. 2.19.0 or master
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant Version
+      placeholder: ex. 2025.4.0
     validations:
       required: true
   - type: checkboxes

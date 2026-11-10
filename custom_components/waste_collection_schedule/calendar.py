@@ -88,8 +88,7 @@ class WasteCollectionCalendar(CalendarEntity):
 
         if len(collections) == 0:
             return None
-        else:
-            return self._convert(collections[0])
+        return self._convert(collections[0])
 
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime
@@ -104,10 +103,14 @@ class WasteCollectionCalendar(CalendarEntity):
         ):
             event = self._convert(collection)
 
+            # Home Assistant asks for events that overlap [start_date, end_date):
+            # the end is exclusive. An all-day event runs from its local midnight
+            # to the next one, so a day that starts exactly at end_date is out,
+            # while today's event still overlaps a range that starts after
+            # midnight (#5852).
             if (
-                start_date.date()
-                <= event.start_datetime_local.date()
-                <= end_date.date()
+                event.start_datetime_local < end_date
+                and event.end_datetime_local > start_date
             ):
                 events.append(event)
 
@@ -119,6 +122,8 @@ class WasteCollectionCalendar(CalendarEntity):
             summary=collection.type,
             start=collection.date,
             end=collection.date + timedelta(days=1),
+            description=collection.description,
+            location=collection.location,
             uid=uuid.uuid4(),
         )
 

@@ -2,7 +2,7 @@ import datetime
 import logging
 from typing import Literal
 
-import requests
+from curl_cffi import requests
 from waste_collection_schedule import Collection
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,10 +31,20 @@ TEST_CASES = {
         "house_number": 2,
         "addition": "A",
     },
+    "Barendrecht Albrandswaard Ridderkerk": {
+        "organization": "afvalbeheer",
+        "post_code": "2991AA",
+        "house_number": 1,
+    },
     "BAT Tilburg": {
         "organization": "bat",
         "post_code": "5071EN",
         "house_number": 122,
+    },
+    "Breda": {
+        "organization": "breda",
+        "post_code": "4762BD",
+        "house_number": 21,
     },
     "Groningen": {
         "organization": "groningen",
@@ -48,7 +58,15 @@ TEST_CASES = {
     },
 }
 
-Organization = Literal["assen", "bat", "groningen", "rmn", "utrecht"]
+Organization = Literal[
+    "assen",
+    "afvalbeheer",
+    "bat",
+    "breda",
+    "groningen",
+    "rmn",
+    "utrecht",
+]
 
 SERVICE_MAP = [
     {
@@ -58,10 +76,22 @@ SERVICE_MAP = [
         "organization": "assen",
     },
     {
+        "title": "Barendrecht Albrandswaard Ridderkerk",
+        "url": "https://www.bar-afvalbeheer.nl/",
+        "uuid": "138204213564933497",
+        "organization": "afvalbeheer",
+    },
+    {
         "title": "BAT Tilburg",
         "url": "https://www.batafvalbeheer.nl/",
         "uuid": "452048812597339353",
         "organization": "bat",
+    },
+    {
+        "title": "Gemeente Breda",
+        "url": "https://www.breda.nl/",
+        "uuid": "452048812597352613",
+        "organization": "breda",
     },
     {
         "title": "Gemeente Groningen",
@@ -97,6 +127,7 @@ class Source:
         addition: str = "",
     ):
         self._api_key: str = "AIzaSyA6NkRqJypTfP-cjWzrZNFJzPUbBaGjOdk"
+        self._session = requests.Session(impersonate="chrome")
         self._addition: str = addition
         self._post_code: str = post_code
         self._house_number: str = house_number
@@ -109,12 +140,12 @@ class Source:
         self._address_id: str = ""
 
     def _set_refresh_token(self):
-        res = requests.post(
+        res = self._session.post(
             f"https://www.googleapis.com/identitytoolkit/v3/relyingparty/signupNewUser?key={self._api_key}"
         )
         payload = res.json()
-        if not payload:
-            _LOGGER.error("Unable to fetch refresh token!")
+        if not payload or "refreshToken" not in payload:
+            _LOGGER.error(f"Unable to fetch refresh token: {payload}")
             return
 
         self._refresh_token = payload["refreshToken"]
@@ -125,7 +156,7 @@ class Source:
 
         data = {"grant_type": "refresh_token", "refresh_token": self._refresh_token}
 
-        res = requests.post(
+        res = self._session.post(
             f"https://securetoken.googleapis.com/v1/token?key={self._api_key}",
             headers=headers,
             data=data,
@@ -139,7 +170,7 @@ class Source:
     def _set_address_id(self) -> None:
         headers = {"authorization": self._id_token}
 
-        res = requests.get(
+        res = self._session.get(
             f"{self._url}/exposed/organisations/{self._organization_code}/address?zipcode={self._post_code}&housenumber={self._house_number}",
             headers=headers,
         )
@@ -150,7 +181,7 @@ class Source:
 
         for address in payload:
             if "addition" in address and address["addition"] == self._addition.upper():
-                self.address_id = address["addressId"]
+                self._address_id = address["addressId"]
 
         if not self._address_id:
             self._address_id = payload[-1]["addressId"]
@@ -159,15 +190,19 @@ class Source:
         # get refresh token and id token
         if not self._refresh_token:
             self._set_refresh_token()
+            if not self._refresh_token:
+                raise ValueError("Authentication token could not be retrieved")
         else:
             self._set_id_token()
 
         # get address id
         if not self._address_id:
             self._set_address_id()
+            if not self._address_id:
+                raise ValueError("Address ID could not be retrieved")
 
         headers = {"authorization": self._id_token}
-        res = requests.get(
+        res = self._session.get(
             f"{self._url}/exposed/organisations/{self._organization_code}/address/{self._address_id}/calendar",
             headers=headers,
         )
